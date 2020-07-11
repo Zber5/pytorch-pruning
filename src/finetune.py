@@ -1,19 +1,13 @@
-import torch
-from torch.autograd import Variable
-from torchvision import models
-import cv2
-import sys
-import numpy as np
-import torchvision
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-import dataset
-from prune import *
+from src import dataset
+from src.prune import *
 import argparse
 from operator import itemgetter
 from heapq import nsmallest
-import time
+from data_loader import generate_data_loader
+from model import LeNet5_GROW_P, LeNet5
+
 
 class ModifiedVGG16Model(torch.nn.Module):
     def __init__(self):
@@ -40,11 +34,12 @@ class ModifiedVGG16Model(torch.nn.Module):
         x = self.classifier(x)
         return x
 
+
 class FilterPrunner:
     def __init__(self, model):
         self.model = model
         self.reset()
-    
+
     def reset(self):
         self.filter_ranks = {}
 
@@ -63,6 +58,14 @@ class FilterPrunner:
                 self.activation_to_layer[activation_index] = layer
                 activation_index += 1
 
+        #
+        # for layer, (name, module) in enumerate(self.model.classifier._modules.items()):
+        #     x = module(x)
+        #     if isinstance(module, torch.nn.modules.linear.Linear):
+        #         x.register_hook(self.compute_rank)
+        #
+        #
+
         return self.model.classifier(x.view(x.size(0), -1))
 
     def compute_rank(self, grad):
@@ -73,7 +76,6 @@ class FilterPrunner:
         # Get the average value for every filter, 
         # accross all the other dimensions
         taylor = taylor.mean(dim=(0, 2, 3)).data
-
 
         if activation_index not in self.filter_ranks:
             self.filter_ranks[activation_index] = \
@@ -120,20 +122,21 @@ class FilterPrunner:
             for i in filters_to_prune_per_layer[l]:
                 filters_to_prune.append((l, i))
 
-        return filters_to_prune             
+        return filters_to_prune
+
 
 class PrunningFineTuner_VGG16:
-    def __init__(self, train_path, test_path, model):
-        self.train_data_loader = dataset.loader(train_path)
-        self.test_data_loader = dataset.test_loader(test_path)
-
+    def __init__(self, train, test, model):
+        # self.train_data_loader = dataset.loader(train_path)
+        # self.test_data_loader = dataset.test_loader(test_path)
+        self.train_data_loader = train
+        self.test_data_loader = test
         self.model = model
         self.criterion = torch.nn.CrossEntropyLoss()
-        self.prunner = FilterPrunner(self.model) 
+        self.prunner = FilterPrunner(self.model)
         self.model.train()
 
     def test(self):
-        return
         self.model.eval()
         correct = 0
         total = 0
@@ -145,12 +148,12 @@ class PrunningFineTuner_VGG16:
             pred = output.data.max(1)[1]
             correct += pred.cpu().eq(label).sum()
             total += label.size(0)
-        
+
         print("Accuracy :", float(correct) / total)
-        
+
         self.model.train()
 
-    def train(self, optimizer = None, epoches=10):
+    def train(self, optimizer=None, epoches=10):
         if optimizer is None:
             optimizer = optim.SGD(model.classifier.parameters(), lr=0.0001, momentum=0.9)
 
@@ -159,7 +162,6 @@ class PrunningFineTuner_VGG16:
             self.train_epoch(optimizer)
             self.test()
         print("Finished fine tuning.")
-        
 
     def train_batch(self, optimizer, batch, label, rank_filters):
 
@@ -177,16 +179,16 @@ class PrunningFineTuner_VGG16:
             self.criterion(self.model(input), Variable(label)).backward()
             optimizer.step()
 
-    def train_epoch(self, optimizer = None, rank_filters = False):
+    def train_epoch(self, optimizer=None, rank_filters=False):
         for i, (batch, label) in enumerate(self.train_data_loader):
             self.train_batch(optimizer, batch, label, rank_filters)
 
     def get_candidates_to_prune(self, num_filters_to_prune):
         self.prunner.reset()
-        self.train_epoch(rank_filters = True)
+        self.train_epoch(rank_filters=True)
         self.prunner.normalize_ranks_per_layer()
         return self.prunner.get_prunning_plan(num_filters_to_prune)
-        
+
     def total_num_filters(self):
         filters = 0
         for name, module in self.model.features._modules.items():
@@ -195,16 +197,16 @@ class PrunningFineTuner_VGG16:
         return filters
 
     def prune(self):
-        #Get the accuracy before prunning
+        # Get the accuracy before prunning
         self.test()
         self.model.train()
 
-        #Make sure all the layers are trainable
+        # Make sure all the layers are trainable
         for param in self.model.features.parameters():
             param.requires_grad = True
 
         number_of_filters = self.total_num_filters()
-        num_filters_to_prune_per_iteration = 512
+        num_filters_to_prune_per_iteration = 5
         iterations = int(float(number_of_filters) / num_filters_to_prune_per_iteration)
 
         iterations = int(iterations * 2.0 / 3)
@@ -218,7 +220,7 @@ class PrunningFineTuner_VGG16:
             for layer_index, filter_index in prune_targets:
                 if layer_index not in layers_prunned:
                     layers_prunned[layer_index] = 0
-                layers_prunned[layer_index] = layers_prunned[layer_index] + 1 
+                layers_prunned[layer_index] = layers_prunned[layer_index] + 1
 
             print("Layers that will be prunned", layers_prunned)
             print("Prunning filters.. ")
@@ -230,25 +232,26 @@ class PrunningFineTuner_VGG16:
             if args.use_cuda:
                 self.model = self.model.cuda()
 
-            message = str(100*float(self.total_num_filters()) / number_of_filters) + "%"
+            message = str(100 * float(self.total_num_filters()) / number_of_filters) + "%"
             print("Filters prunned", str(message))
+            print("New model size is {}".format(model_size(find_modules(self.model))))
             self.test()
             print("Fine tuning to recover from prunning iteration.")
             optimizer = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
-            self.train(optimizer, epoches = 10)
-
+            self.train(optimizer, epoches=5)
 
         print("Finished. Going to fine tune the model a bit more")
-        self.train(optimizer, epoches=15)
+        self.train(optimizer, epoches=5)
         torch.save(model.state_dict(), "model_prunned")
+
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train", dest="train", action="store_true")
     parser.add_argument("--prune", dest="prune", action="store_true")
-    parser.add_argument("--train_path", type = str, default = "train")
-    parser.add_argument("--test_path", type = str, default = "test")
-    parser.add_argument('--use-cuda', action='store_true', default=False, help='Use NVIDIA GPU acceleration')    
+    parser.add_argument("--train_path", type=str, default="train")
+    parser.add_argument("--test_path", type=str, default="test")
+    parser.add_argument('--use-cuda', action='store_true', default=False, help='Use NVIDIA GPU acceleration')
     parser.set_defaults(train=False)
     parser.set_defaults(prune=False)
     args = parser.parse_args()
@@ -256,22 +259,95 @@ def get_args():
 
     return args
 
+
+def find_modules(model):
+    modules = []
+    for module in model.modules():
+        if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
+            modules.append(module)
+    return modules
+
+
+def find_modules_short(model):
+    modules = []
+    for module in model.modules():
+        if isinstance(module, torch.nn.Conv2d) or isinstance(module, torch.nn.Linear):
+            modules.append(module)
+    return modules
+
+
+def model_size(layers):
+    size = []
+    for module in layers:
+        size.append(module.weight.data.shape[0])
+    return size
+
+
 if __name__ == '__main__':
     args = get_args()
+    args.use_cuda = args.use_cuda and torch.cuda.is_available()
 
-    if args.train:
-        model = ModifiedVGG16Model()
-    elif args.prune:
-        model = torch.load("model", map_location=lambda storage, loc: storage)
+    # args = get_args()
+    #
+    # if args.train:
+    #     model = ModifiedVGG16Model()
+    # elif args.prune:
+    #     model = torch.load("model", map_location=lambda storage, loc: storage)
+    #
+    # if args.use_cuda:
+    #     model = model.cuda()
+    #
+    # fine_tuner = PrunningFineTuner_VGG16(args.train_path, args.test_path, model)
+    #
+    # if args.train:
+    #     fine_tuner.train(epoches=10)
+    #     torch.save(model, "model")
+    #
+    # elif args.prune:
+    #     fine_tuner.prune()
+
+    dataset = "MNIST"
+
+    param = {
+        'lr': 0.0005,
+        'epoch': 20,
+        'batch_size': 64,
+        'is_bn': False,
+    }
+
+    trainloader, testloader = generate_data_loader(batch_size=param['batch_size'], dataset=dataset)
+
+    kwargs = {'out1': 20, 'out2': 50, 'fc1': 500}
+
+    model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Models/model_standard_20_50_500_.ckpt"
+
+    # kwargs = {
+    #     'in_channel': 9,
+    #     'out1_channel': 3,
+    #     'out2_channel': 6,
+    #     'out3_channel': 12,
+    #     'out4_channel': 25,
+    #     'out_classes': 6,
+    #     'kernel_size': 14,
+    #     'avg_factor': 2
+    # }
+
+    model = LeNet5_GROW_P(**kwargs)
+
+    # net.load_state_dict(torch.load('models/convnet_pretrained.pkl'))
+
+    model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
 
     if args.use_cuda:
         model = model.cuda()
 
-    fine_tuner = PrunningFineTuner_VGG16(args.train_path, args.test_path, model)
+    # create fine tuner object
+    fine_tuner = PrunningFineTuner_VGG16(trainloader, testloader, model)
 
-    if args.train:
-        fine_tuner.train(epoches=10)
-        torch.save(model, "model")
+    # fine_tuner.train(epoches=10)
+    # torch.save(model, "model")
 
-    elif args.prune:
-        fine_tuner.prune()
+    fine_tuner.test()
+
+    # prune
+    fine_tuner.prune()
