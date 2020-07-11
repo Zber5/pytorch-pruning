@@ -152,6 +152,7 @@ class PrunningFineTuner_VGG16:
         print("Accuracy :", float(correct) / total)
 
         self.model.train()
+        return float(correct) / total
 
     def train(self, optimizer=None, epoches=10):
         if optimizer is None:
@@ -239,9 +240,12 @@ class PrunningFineTuner_VGG16:
             print("Fine tuning to recover from prunning iteration.")
             optimizer = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
             self.train(optimizer, epoches=5)
+            acc = self.test()
+            if acc < 0.87:
+                break
 
         print("Finished. Going to fine tune the model a bit more")
-        self.train(optimizer, epoches=5)
+        self.train(optimizer, epoches=10)
         torch.save(model.state_dict(), "model_prunned")
 
 
@@ -306,7 +310,8 @@ if __name__ == '__main__':
     # elif args.prune:
     #     fine_tuner.prune()
 
-    dataset = "MNIST"
+    # dataset = "MNIST"
+    dataset = "EMG"
 
     param = {
         'lr': 0.0005,
@@ -317,24 +322,32 @@ if __name__ == '__main__':
 
     trainloader, testloader = generate_data_loader(batch_size=param['batch_size'], dataset=dataset)
 
-    kwargs = {'out1': 20, 'out2': 50, 'fc1': 500}
-
-    model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Models/model_standard_20_50_500_.ckpt"
-
-    # kwargs = {
-    #     'in_channel': 9,
-    #     'out1_channel': 3,
-    #     'out2_channel': 6,
-    #     'out3_channel': 12,
-    #     'out4_channel': 25,
-    #     'out_classes': 6,
-    #     'kernel_size': 14,
-    #     'avg_factor': 2
-    # }
-
-    model = LeNet5_GROW_P(**kwargs)
+    # kwargs = {'out1': 20, 'out2': 50, 'fc1': 500}
+    #
+    # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Models/model_standard_20_50_500_.ckpt"
+    # har_path = ""
+    #
+    #
+    # # model = LeNet5_GROW_P(**kwargs)
 
     # net.load_state_dict(torch.load('models/convnet_pretrained.pkl'))
+
+    kwargs = {
+        'in_channel': 8,
+        'out1_channel': 20,
+        'out2_channel': 50,
+        'fc': 52,
+        'out_classes': 6,
+        'kernel_size': 14,
+        'flatten_factor': 15
+    }
+
+    model = LeNet5(**kwargs)
+
+    # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_Har_LeNet_20200711-141653/model.pt"
+    model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_EMG_LeNet_20200711-144220/model.pt"
+    # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_myHealth_LeNet_20200711-145106/model.pt"
+    # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_FinDroid_LeNet_20200711-145503/model.pt"
 
     model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
 
