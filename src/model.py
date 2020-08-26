@@ -63,6 +63,44 @@ class LeNet5(nn.Module):
         return out2
 
 
+class NetS(nn.Module):
+    def __init__(self, in_channel=9, out1_channel=32, out2_channel=64, out3_channel=128, out4_channel=256, out_classes=10, avg_factor=13, kernel_size=14):
+        super(NetS, self).__init__()
+
+        def conv_bn(inp, oup, stride):
+            return nn.Sequential(
+                nn.Conv2d(inp, oup, (1, kernel_size), stride, 0, bias=False),
+                # nn.BatchNorm2d(oup),
+                nn.ReLU(inplace=True)
+            )
+
+        def conv_dw(inp, oup, stride):
+            return nn.Sequential(
+                nn.Conv2d(inp, inp, (1, kernel_size), stride, 0, groups=inp, bias=False),
+                # nn.BatchNorm2d(inp),
+                nn.ReLU(inplace=True),
+
+                nn.Conv2d(inp, oup, 1, 1, 0, bias=False),
+                # nn.BatchNorm2d(oup),
+                nn.ReLU(inplace=True),
+            )
+
+        self.model = nn.Sequential(
+            conv_bn(in_channel, out1_channel, (1, 2)),
+            conv_dw(out1_channel, out2_channel, (1, 1)),
+            conv_dw(out2_channel, out3_channel, (1, 2)),
+            conv_dw(out3_channel, out4_channel, (1, 2)),
+            nn.AvgPool2d((1, avg_factor)),
+        )
+        self.fc = nn.Linear(out4_channel, out_classes)
+
+    def forward(self, x):
+        x = self.model(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+
+
 cfg = {
     'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'VGG11_10': [8, 'M', 16, 'M', 32, 32, 'M', 64, 64, 'M', 64, 64, 'M'],
