@@ -98,7 +98,7 @@ class FilterPrunner:
     def normalize_ranks_per_layer(self):
         for i in self.filter_ranks:
             v = torch.abs(self.filter_ranks[i])
-            v = v / np.sqrt(torch.sum(v * v))
+            v = v / torch.sqrt(torch.sum(v * v))
             self.filter_ranks[i] = v.cpu()
 
     def get_prunning_plan(self, num_filters_to_prune):
@@ -213,7 +213,7 @@ class PrunningFineTuner_VGG16:
 
         iterations = int(iterations * config.prune_percentage)
 
-        print("Number of prunning iterations to reduce 67% filters", iterations)
+        print(f"{iterations} Number of prunning iterations to reduce {config.prune_percentage}% filters")
 
         for _ in range(iterations):
             print("Ranking filters.. ")
@@ -257,7 +257,7 @@ def get_args():
     parser.add_argument("--prune", dest="prune", action="store_true")
     parser.add_argument("--train_path", type=str, default="train")
     parser.add_argument("--test_path", type=str, default="test")
-    parser.add_argument('--use-cuda', action='store_true', default=False, help='Use NVIDIA GPU acceleration')
+    parser.add_argument('--use-cuda', action='store_true', default=True, help='Use NVIDIA GPU acceleration')
     parser.set_defaults(train=False)
     parser.set_defaults(prune=False)
     args = parser.parse_args()
@@ -298,7 +298,7 @@ if __name__ == '__main__':
         epoch = 20
         batch_size = 64
         is_bn = False
-        num_filters_to_prune_per_iteration = 5
+        num_filters_to_prune_per_iteration = 20
         prune_percentage = 0.8
         threshold = 0.80
         retrian_epoch = 20
@@ -335,7 +335,7 @@ if __name__ == '__main__':
     #     'is_bn': False,
     # }
 
-    trainloader, testloader = generate_data_loader(batch_size=param['batch_size'], dataset=dataset)
+    trainloader, testloader = generate_data_loader(batch_size=config.batch_size, dataset=dataset)
 
     # kwargs = {'out1': 20, 'out2': 50, 'fc1': 500}
     #
@@ -361,9 +361,11 @@ if __name__ == '__main__':
     model = VGG_BN("VGG11")
 
     # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_Har_LeNet_20200711-141653/model.pt"
-    model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_EMG_LeNet_20200711-144220/model.pt"
+    # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_EMG_LeNet_20200711-144220/model.pt"
     # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_myHealth_LeNet_20200711-145106/model.pt"
     # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_FinDroid_LeNet_20200711-145503/model.pt"
+    model_path = "C:\\Users\\Zber\\Documents\\Dev_program\\FastGrownTest\\results\\CIFAR10_VGG11_20200828-215209\\model_VGG11.ckpt"
+
 
     model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
 

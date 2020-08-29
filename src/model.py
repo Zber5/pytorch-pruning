@@ -64,7 +64,8 @@ class LeNet5(nn.Module):
 
 
 class NetS(nn.Module):
-    def __init__(self, in_channel=9, out1_channel=32, out2_channel=64, out3_channel=128, out4_channel=256, out_classes=10, avg_factor=13, kernel_size=14):
+    def __init__(self, in_channel=9, out1_channel=32, out2_channel=64, out3_channel=128, out4_channel=256,
+                 out_classes=10, avg_factor=13, kernel_size=14):
         super(NetS, self).__init__()
 
         def conv_bn(inp, oup, stride):
@@ -131,7 +132,7 @@ class VGG(nn.Module):
         out = self.features(x)
         out1 = out.view(out.size(0), -1)
         out = self.classifier(out1)
-        return out1, out
+        return out
 
     def _make_layers(self, cfg):
         layers = []
@@ -158,7 +159,7 @@ class VGG_BN(nn.Module):
         out = self.features(x)
         out1 = out.view(out.size(0), -1)
         out = self.classifier(out1)
-        return out1, out
+        return out
 
     def _make_layers(self, cfg):
         layers = []
@@ -185,6 +186,3 @@ if __name__ == "__main__":
     # print('{:<30}  {:<8}'.format('Number of parameters: ', params))
     #
     # print('abcd')
-
-
-

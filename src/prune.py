@@ -9,6 +9,8 @@ import time
 import math
 
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 def replace_layers(model, i, indexes, layers):
     if i in indexes:
         return layers[indexes.index(i)]
@@ -16,6 +18,10 @@ def replace_layers(model, i, indexes, layers):
 
 
 def prune_vgg16_conv_layer(model, layer_index, filter_index, use_cuda=False):
+
+    # replace batchnormal layer
+    model = replace_bn_layers(model, layer_index, filter_index)
+
     _, conv = list(model.features._modules.items())[layer_index]
     next_conv = None
     offset = 1
@@ -129,6 +135,34 @@ def prune_vgg16_conv_layer(model, layer_index, filter_index, use_cuda=False):
         del next_conv
         del conv
         model.classifier = classifier
+
+    return model
+
+
+def replace_bn_layers(model, layer_index, filter_index):
+    del_num = 1
+    _, current_layer  = list(model.features._modules.items())[layer_index+1]
+    new_num_features = current_layer.num_features - del_num
+
+    new_bn = nn.BatchNorm2d(
+        num_features=new_num_features,
+        eps=current_layer.eps,
+        momentum=current_layer.momentum,
+        affine=current_layer.affine,
+        track_running_stats=current_layer.track_running_stats
+    )
+
+    # bias
+    new_bn.bias.data[:filter_index] = current_layer.bias.data[:filter_index]
+    new_bn.bias.data[filter_index:] = current_layer.bias.data[filter_index+1:]
+
+    # weight
+    new_bn.weight.data[:filter_index] = current_layer.weight.data[:filter_index]
+    new_bn.weight.data[filter_index:] = current_layer.weight.data[filter_index+1:]
+
+    # find old layer's position
+    seq, index = find_seq_index(model, current_layer)
+    seq[index] = new_bn
 
     return model
 
