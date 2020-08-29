@@ -6,7 +6,9 @@ import argparse
 from operator import itemgetter
 from heapq import nsmallest
 from data_loader import generate_data_loader
-from model import LeNet5_GROW_P, LeNet5, VGG_BN
+from model import NetS
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class ModifiedVGG16Model(torch.nn.Module):
@@ -50,9 +52,9 @@ class FilterPrunner:
         self.activation_to_layer = {}
 
         activation_index = 0
-        for layer, (name, module) in enumerate(self.model.features._modules.items()):
+        for layer, (name, module) in enumerate(self.model.model._modules.items()):
             x = module(x)
-            if isinstance(module, torch.nn.modules.conv.Conv2d):
+            if isinstance(module, torch.nn.modules.Sequential):
                 x.register_hook(self.compute_rank)
                 self.activations.append(x)
                 self.activation_to_layer[activation_index] = layer
@@ -66,7 +68,7 @@ class FilterPrunner:
         #
         #
 
-        return self.model.classifier(x.view(x.size(0), -1))
+        return self.model.fc(x.view(x.size(0), -1))
 
     def compute_rank(self, grad):
         activation_index = len(self.activations) - self.grad_index - 1
@@ -156,7 +158,7 @@ class PrunningFineTuner_VGG16:
 
     def train(self, optimizer=None, epoches=10):
         if optimizer is None:
-            # optimizer = optim.SGD(model.classifier.parameters(), lr=0.0001, momentum=0.9)
+            # optimizer = optim.SGD(model.classifier.parameters(), lr=param['lr'], momentum=0.9)
             optimizer = optim.Adam(self.model.parameters(), lr=config.lr)
 
         for i in range(epoches):
@@ -191,9 +193,16 @@ class PrunningFineTuner_VGG16:
         self.prunner.normalize_ranks_per_layer()
         return self.prunner.get_prunning_plan(num_filters_to_prune)
 
+    # def total_num_filters(self):
+    #     filters = 0
+    #     for name, module in self.model.features._modules.items():
+    #         if isinstance(module, torch.nn.modules.conv.Conv2d):
+    #             filters = filters + module.out_channels
+    #     return filters
+
     def total_num_filters(self):
         filters = 0
-        for name, module in self.model.features._modules.items():
+        for module in self.model.modules():
             if isinstance(module, torch.nn.modules.conv.Conv2d):
                 filters = filters + module.out_channels
         return filters
@@ -204,8 +213,8 @@ class PrunningFineTuner_VGG16:
         self.model.train()
 
         # Make sure all the layers are trainable
-        for param in self.model.features.parameters():
-            param.requires_grad = True
+        # for param in self.model.features.parameters():
+        #     param.requires_grad = True
 
         number_of_filters = self.total_num_filters()
         num_filters_to_prune_per_iteration = config.num_filters_to_prune_per_iteration
@@ -213,7 +222,7 @@ class PrunningFineTuner_VGG16:
 
         iterations = int(iterations * config.prune_percentage)
 
-        print("Number of prunning iterations to reduce 67% filters", iterations)
+        print("{} pruning iterations to reduce {:.2f}% filters".format(iterations, config.prune_percentage * 100))
 
         for _ in range(iterations):
             print("Ranking filters.. ")
@@ -228,7 +237,7 @@ class PrunningFineTuner_VGG16:
             print("Prunning filters.. ")
             model = self.model.cpu()
             for layer_index, filter_index in prune_targets:
-                model = prune_vgg16_conv_layer(model, layer_index, filter_index, use_cuda=args.use_cuda)
+                model = prune_mbnet_layer(model, layer_index, filter_index)
 
             self.model = model
             if args.use_cuda:
@@ -239,16 +248,17 @@ class PrunningFineTuner_VGG16:
             print("New model size is {}".format(model_size(find_modules(self.model))))
             self.test()
             print("Fine tuning to recover from prunning iteration.")
-            # optimizer = optim.SGD(self.model.parameters(), lr=config.lr, momentum=0.9)
+
+            # optimizer = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
             optimizer = optim.Adam(self.model.parameters(), lr=config.lr)
             self.train(optimizer, epoches=config.retrian_epoch)
             acc = self.test()
-            if acc < 0.87:
+            if acc < config.threshold:
                 break
 
         print("Finished. Going to fine tune the model a bit more")
         self.train(optimizer, epoches=config.finetune_epoch)
-        torch.save(model.state_dict(), "model_prunned.pt")
+        torch.save(model.state_dict(), "model_prunned")
 
 
 def get_args():
@@ -289,20 +299,16 @@ def model_size(layers):
     return size
 
 
+def obtain_ff(dic, width=128):
+    strides = [2, 1, 2, 2]
+    for i in range(4):
+        width = (width - dic['kernel_size']) // strides[i] + 1
+    return width
+
+
 if __name__ == '__main__':
     args = get_args()
     args.use_cuda = args.use_cuda and torch.cuda.is_available()
-
-    class config:
-        lr = 0.0005
-        epoch = 20
-        batch_size = 64
-        is_bn = False
-        num_filters_to_prune_per_iteration = 5
-        prune_percentage = 0.8
-        threshold = 0.80
-        retrian_epoch = 20
-        finetune_epoch = 10
 
     # args = get_args()
     #
@@ -324,18 +330,21 @@ if __name__ == '__main__':
     #     fine_tuner.prune()
 
     # dataset = "MNIST"
-    # dataset = "EMG"
-    dataset = "CIFAR10"
+    dataset = "HUA"
+
+    class config:
+        lr = 0.0005
+        epoch = 20
+        batch_size = 64
+        is_bn = False
+        num_filters_to_prune_per_iteration = 5
+        prune_percentage = 0.8
+        threshold = 0.80
+        retrian_epoch = 20
+        finetune_epoch = 10
 
 
-    # param = {
-    #     'lr': 0.0005,
-    #     'epoch': 20,
-    #     'batch_size': 64,
-    #     'is_bn': False,
-    # }
-
-    trainloader, testloader = generate_data_loader(batch_size=param['batch_size'], dataset=dataset)
+    trainloader, testloader = generate_data_loader(batch_size=config.batch_size, dataset=dataset)
 
     # kwargs = {'out1': 20, 'out2': 50, 'fc1': 500}
     #
@@ -346,26 +355,109 @@ if __name__ == '__main__':
     # # model = LeNet5_GROW_P(**kwargs)
 
     # net.load_state_dict(torch.load('models/convnet_pretrained.pkl'))
+    # EMG
 
-    # kwargs = {
-    #     'in_channel': 8,
-    #     'out1_channel': 20,
-    #     'out2_channel': 50,
-    #     'fc': 52,
-    #     'out_classes': 6,
-    #     'kernel_size': 14,
-    #     'flatten_factor': 15
-    # }
-    #
-    # model = LeNet5(**kwargs)
-    model = VGG_BN("VGG11")
+    if dataset == "Har":
+        input_shape = (9, 1, 128)
+        width = 128
+        kwargs = {
+            'in_channel': 9,
+            'out1_channel': 32,
+            'out2_channel': 64,
+            'out3_channel': 128,
+            'out4_channel': 256,
+            'out_classes': 6,
+            'kernel_size': 14,
+            'avg_factor': 2
+        }
 
-    # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_Har_LeNet_20200711-141653/model.pt"
-    model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_EMG_LeNet_20200711-144220/model.pt"
-    # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_myHealth_LeNet_20200711-145106/model.pt"
-    # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_FinDroid_LeNet_20200711-145503/model.pt"
+        ff = obtain_ff(kwargs, width)
+        kwargs['avg_factor'] = ff
 
-    model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
+    elif dataset == "EMG":
+        input_shape = (8, 1, 100)
+        width = 100
+        kwargs = {
+            'in_channel': 8,
+            'out1_channel': 32,
+            'out2_channel': 64,
+            'out3_channel': 128,
+            'out4_channel': 256,
+            'out_classes': 6,
+            'kernel_size': 12,
+            'avg_factor': 2
+        }
+
+        ff = obtain_ff(kwargs, width)
+        kwargs['avg_factor'] = ff
+
+    elif dataset == 'myHealth':
+        width = 100
+        input_shape = (23, 1, 100)
+        kwargs = {
+            'in_channel': 23,
+            'out1_channel': 32,
+            'out2_channel': 64,
+            'out3_channel': 128,
+            'out4_channel': 256,
+            'out_classes': 11,
+            'kernel_size': 12,
+            'avg_factor': 2
+        }
+
+        f_kwargs = {
+            'in_channel': 23,
+            'out1_channel': 32,
+            'out2_channel': 64,
+            'out3_channel': 128,
+            'out4_channel': 256,
+            'out_classes': 11,
+            'kernel_size': 12,
+            'avg_factor': 1
+        }
+        ff = obtain_ff(kwargs, width)
+        kwargs['avg_factor'] = ff
+
+    elif dataset == 'FinDroid':
+        width = 150
+        input_shape = (6, 1, 150)
+
+        kwargs = {
+            'in_channel': 6,
+            'out1_channel': 32,
+            'out2_channel': 64,
+            'out3_channel': 128,
+            'out4_channel': 256,
+            'out_classes': 6,
+            'kernel_size': 14,
+            'avg_factor': 2
+        }
+
+        ff = obtain_ff(kwargs, width)
+        kwargs['avg_factor'] = ff
+
+    elif dataset == 'HUA':
+        width = 200
+        input_shape = (7, 1, 200)
+        path_to_model= "/Users/zber/ProgramDev/pytorch-pruning/data/HUA/model.pt"
+        kwargs = {
+            'in_channel': 7,
+            'out1_channel': 32,
+            'out2_channel': 64,
+            'out3_channel': 128,
+            'out4_channel': 256,
+            'out_classes': 3,
+            'kernel_size': 10,
+            'avg_factor': 2
+        }
+
+        ff = obtain_ff(kwargs, width)
+        kwargs['avg_factor'] = ff
+
+    model = NetS(**kwargs)
+
+    # model.load_state_dict(torch.load(path_to_model, map_location=lambda storage, loc: storage))
+    model.load_state_dict(torch.load(path_to_model))
 
     if args.use_cuda:
         model = model.cuda()
@@ -373,10 +465,10 @@ if __name__ == '__main__':
     # create fine tuner object
     fine_tuner = PrunningFineTuner_VGG16(trainloader, testloader, model)
 
-    # fine_tuner.train(epoches=10)
-    # torch.save(model, "model")
+    # fine_tuner.train(epoches=200)
+    # torch.save(model.state_dict(), path_to_model)
 
-    fine_tuner.test()
+    # fine_tuner.test()
 
     # prune
     fine_tuner.prune()
