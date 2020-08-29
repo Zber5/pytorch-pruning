@@ -3,6 +3,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 import numpy as np
+import os
 
 
 #######################
@@ -197,6 +198,18 @@ def generate_data_loader(batch_size, dataset='MNIST', is_main=True):
         path_to_y_test = "/Users/zber/ProgramDev/data_process_jupyter/Finger/data_gen/test_y.npy"
         path_to_x_train = "/Users/zber/ProgramDev/data_process_jupyter/Finger/data_gen/train_X.npy"
         path_to_y_train = "/Users/zber/ProgramDev/data_process_jupyter/Finger/data_gen/train_y.npy"
+
+        trainset = DataSet(path_to_x_train, path_to_y_train)
+        testset = DataSet(path_to_x_test, path_to_y_test)
+        trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
+        testloader = DataLoader(testset, batch_size=batch_size, shuffle=True)
+
+    elif dataset == 'HUA':
+        root = "/Users/zber/ProgramDev/pytorch-pruning/data/HUA/acc_ppg2_gyro"
+        path_to_x_test = os.path.join(root, 'test_X.npy')
+        path_to_y_test = os.path.join(root, 'test_y.npy')
+        path_to_x_train = os.path.join(root, 'train_X.npy')
+        path_to_y_train = os.path.join(root, 'train_y.npy')
 
         trainset = DataSet(path_to_x_train, path_to_y_train)
         testset = DataSet(path_to_x_test, path_to_y_test)

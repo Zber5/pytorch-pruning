@@ -6,7 +6,7 @@ import argparse
 from operator import itemgetter
 from heapq import nsmallest
 from data_loader import generate_data_loader
-from model import LeNet5_GROW_P, LeNet5
+from model import LeNet5_GROW_P, LeNet5, VGG_BN
 
 
 class ModifiedVGG16Model(torch.nn.Module):
@@ -156,7 +156,8 @@ class PrunningFineTuner_VGG16:
 
     def train(self, optimizer=None, epoches=10):
         if optimizer is None:
-            optimizer = optim.SGD(model.classifier.parameters(), lr=0.0001, momentum=0.9)
+            # optimizer = optim.SGD(model.classifier.parameters(), lr=0.0001, momentum=0.9)
+            optimizer = optim.Adam(self.model.parameters(), lr=config.lr)
 
         for i in range(epoches):
             print("Epoch: ", i)
@@ -207,10 +208,10 @@ class PrunningFineTuner_VGG16:
             param.requires_grad = True
 
         number_of_filters = self.total_num_filters()
-        num_filters_to_prune_per_iteration = 5
+        num_filters_to_prune_per_iteration = config.num_filters_to_prune_per_iteration
         iterations = int(float(number_of_filters) / num_filters_to_prune_per_iteration)
 
-        iterations = int(iterations * 2.0 / 3)
+        iterations = int(iterations * config.prune_percentage)
 
         print("Number of prunning iterations to reduce 67% filters", iterations)
 
@@ -238,15 +239,16 @@ class PrunningFineTuner_VGG16:
             print("New model size is {}".format(model_size(find_modules(self.model))))
             self.test()
             print("Fine tuning to recover from prunning iteration.")
-            optimizer = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
-            self.train(optimizer, epoches=5)
+            # optimizer = optim.SGD(self.model.parameters(), lr=config.lr, momentum=0.9)
+            optimizer = optim.Adam(self.model.parameters(), lr=config.lr)
+            self.train(optimizer, epoches=config.retrian_epoch)
             acc = self.test()
             if acc < 0.87:
                 break
 
         print("Finished. Going to fine tune the model a bit more")
-        self.train(optimizer, epoches=10)
-        torch.save(model.state_dict(), "model_prunned")
+        self.train(optimizer, epoches=config.finetune_epoch)
+        torch.save(model.state_dict(), "model_prunned.pt")
 
 
 def get_args():
@@ -291,6 +293,17 @@ if __name__ == '__main__':
     args = get_args()
     args.use_cuda = args.use_cuda and torch.cuda.is_available()
 
+    class config:
+        lr = 0.0005
+        epoch = 20
+        batch_size = 64
+        is_bn = False
+        num_filters_to_prune_per_iteration = 5
+        prune_percentage = 0.8
+        threshold = 0.80
+        retrian_epoch = 20
+        finetune_epoch = 10
+
     # args = get_args()
     #
     # if args.train:
@@ -311,14 +324,16 @@ if __name__ == '__main__':
     #     fine_tuner.prune()
 
     # dataset = "MNIST"
-    dataset = "EMG"
+    # dataset = "EMG"
+    dataset = "CIFAR10"
 
-    param = {
-        'lr': 0.0005,
-        'epoch': 20,
-        'batch_size': 64,
-        'is_bn': False,
-    }
+
+    # param = {
+    #     'lr': 0.0005,
+    #     'epoch': 20,
+    #     'batch_size': 64,
+    #     'is_bn': False,
+    # }
 
     trainloader, testloader = generate_data_loader(batch_size=param['batch_size'], dataset=dataset)
 
@@ -332,17 +347,18 @@ if __name__ == '__main__':
 
     # net.load_state_dict(torch.load('models/convnet_pretrained.pkl'))
 
-    kwargs = {
-        'in_channel': 8,
-        'out1_channel': 20,
-        'out2_channel': 50,
-        'fc': 52,
-        'out_classes': 6,
-        'kernel_size': 14,
-        'flatten_factor': 15
-    }
-
-    model = LeNet5(**kwargs)
+    # kwargs = {
+    #     'in_channel': 8,
+    #     'out1_channel': 20,
+    #     'out2_channel': 50,
+    #     'fc': 52,
+    #     'out_classes': 6,
+    #     'kernel_size': 14,
+    #     'flatten_factor': 15
+    # }
+    #
+    # model = LeNet5(**kwargs)
+    model = VGG_BN("VGG11")
 
     # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_Har_LeNet_20200711-141653/model.pt"
     model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_EMG_LeNet_20200711-144220/model.pt"

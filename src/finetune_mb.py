@@ -330,17 +330,17 @@ if __name__ == '__main__':
     #     fine_tuner.prune()
 
     # dataset = "MNIST"
-    dataset = "FinDroid"
+    dataset = "HUA"
 
     class config:
         lr = 0.0005
         epoch = 20
         batch_size = 64
         is_bn = False
-        num_filters_to_prune_per_iteration = 30
-        prune_percentage = 0.6
-        threshold = 0.986
-        retrian_epoch = 10
+        num_filters_to_prune_per_iteration = 5
+        prune_percentage = 0.8
+        threshold = 0.80
+        retrian_epoch = 20
         finetune_epoch = 10
 
 
@@ -436,9 +436,28 @@ if __name__ == '__main__':
         ff = obtain_ff(kwargs, width)
         kwargs['avg_factor'] = ff
 
+    elif dataset == 'HUA':
+        width = 200
+        input_shape = (7, 1, 200)
+        path_to_model= "/Users/zber/ProgramDev/pytorch-pruning/data/HUA/model.pt"
+        kwargs = {
+            'in_channel': 7,
+            'out1_channel': 32,
+            'out2_channel': 64,
+            'out3_channel': 128,
+            'out4_channel': 256,
+            'out_classes': 3,
+            'kernel_size': 10,
+            'avg_factor': 2
+        }
+
+        ff = obtain_ff(kwargs, width)
+        kwargs['avg_factor'] = ff
+
     model = NetS(**kwargs)
 
-    # model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
+    # model.load_state_dict(torch.load(path_to_model, map_location=lambda storage, loc: storage))
+    model.load_state_dict(torch.load(path_to_model))
 
     if args.use_cuda:
         model = model.cuda()
@@ -446,10 +465,10 @@ if __name__ == '__main__':
     # create fine tuner object
     fine_tuner = PrunningFineTuner_VGG16(trainloader, testloader, model)
 
-    fine_tuner.train(epoches=20)
-    # torch.save(model, "model")
+    # fine_tuner.train(epoches=200)
+    # torch.save(model.state_dict(), path_to_model)
 
-    fine_tuner.test()
+    # fine_tuner.test()
 
     # prune
     fine_tuner.prune()
