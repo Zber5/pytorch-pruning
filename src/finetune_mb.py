@@ -258,7 +258,10 @@ class PrunningFineTuner_VGG16:
 
         print("Finished. Going to fine tune the model a bit more")
         self.train(optimizer, epoches=config.finetune_epoch)
-        torch.save(model.state_dict(), "model_prunned")
+        # torch.save(model.state_dict(), "model_prunned")
+
+    def save_model(self, model_path):
+        torch.save(self.model.state_dict(), model_path)
 
 
 def get_args():
@@ -307,6 +310,7 @@ def obtain_ff(dic, width=128):
 
 
 if __name__ == '__main__':
+    set_mode("MobileNet")
     args = get_args()
     args.use_cuda = args.use_cuda and torch.cuda.is_available()
 
@@ -330,17 +334,19 @@ if __name__ == '__main__':
     #     fine_tuner.prune()
 
     # dataset = "MNIST"
-    dataset = "HUA"
+    dataset = "Fin_Sitting"
+    # dataset = "Fin_SitRun"
 
     class config:
         lr = 0.0005
+        # lr = 0.001
         epoch = 20
         batch_size = 64
         is_bn = False
-        num_filters_to_prune_per_iteration = 5
+        num_filters_to_prune_per_iteration = 10
         prune_percentage = 0.8
-        threshold = 0.80
-        retrian_epoch = 20
+        threshold = 0.97
+        retrian_epoch = 5
         finetune_epoch = 10
 
 
@@ -418,16 +424,27 @@ if __name__ == '__main__':
         ff = obtain_ff(kwargs, width)
         kwargs['avg_factor'] = ff
 
-    elif dataset == 'FinDroid':
+    elif dataset in ['FinDroid', 'Fin_Sitting', 'Fin_SitRun']:
         width = 150
         input_shape = (6, 1, 150)
 
+        # kwargs = {
+        #     'in_channel': 6,
+        #     'out1_channel': 32,
+        #     'out2_channel': 64,
+        #     'out3_channel': 128,
+        #     'out4_channel': 256,
+        #     'out_classes': 6,
+        #     'kernel_size': 14,
+        #     'avg_factor': 2
+        # }
+
         kwargs = {
             'in_channel': 6,
-            'out1_channel': 32,
-            'out2_channel': 64,
-            'out3_channel': 128,
-            'out4_channel': 256,
+            'out1_channel': 6,
+            'out2_channel': 6,
+            'out3_channel': 11,
+            'out4_channel': 27,
             'out_classes': 6,
             'kernel_size': 14,
             'avg_factor': 2
@@ -457,7 +474,8 @@ if __name__ == '__main__':
     model = NetS(**kwargs)
 
     # model.load_state_dict(torch.load(path_to_model, map_location=lambda storage, loc: storage))
-    model.load_state_dict(torch.load(path_to_model))
+    # model.load_state_dict(torch.load("/Users/zber/ProgramDev/pytorch-pruning/src/mobile_fullsize.pt"))
+    model.load_state_dict(torch.load("/Users/zber/ProgramDev/pytorch-pruning/src/mobile_prunedsize.pt"))
 
     if args.use_cuda:
         model = model.cuda()
@@ -465,10 +483,16 @@ if __name__ == '__main__':
     # create fine tuner object
     fine_tuner = PrunningFineTuner_VGG16(trainloader, testloader, model)
 
-    # fine_tuner.train(epoches=200)
+    # test before training
+    fine_tuner.test()
+
+    fine_tuner.train(epoches=config.epoch)
     # torch.save(model.state_dict(), path_to_model)
 
-    # fine_tuner.test()
-
     # prune
-    fine_tuner.prune()
+    # fine_tuner.prune()
+
+    # save model
+    # fine_tuner.save_model("mobile_prunedsize.pt")
+
+

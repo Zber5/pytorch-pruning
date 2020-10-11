@@ -216,4 +216,28 @@ def generate_data_loader(batch_size, dataset='MNIST', is_main=True):
         trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
         testloader = DataLoader(testset, batch_size=batch_size, shuffle=True)
 
+    elif dataset == 'Fin_Sitting':
+        path_to_x_train = "/Users/zber/ProgramDev/data_process_jupyter/Finger/sitting/x_train.npy"
+        path_to_y_train = "/Users/zber/ProgramDev/data_process_jupyter/Finger/sitting/y_train.npy"
+
+        path_to_x_test = "/Users/zber/ProgramDev/data_process_jupyter/Finger/sitting/x_test.npy"
+        path_to_y_test = "/Users/zber/ProgramDev/data_process_jupyter/Finger/sitting/y_test.npy"
+
+        trainset = DataSet(path_to_x_train, path_to_y_train)
+        testset = DataSet(path_to_x_test, path_to_y_test)
+        trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
+        testloader = DataLoader(testset, batch_size=batch_size, shuffle=True)
+
+    elif dataset == 'Fin_SitRun':
+        path_to_x_train = "/Users/zber/ProgramDev/data_process_jupyter/Finger/running/x_train.npy"
+        path_to_y_train = "/Users/zber/ProgramDev/data_process_jupyter/Finger/running/y_train.npy"
+
+        path_to_x_test = "/Users/zber/ProgramDev/data_process_jupyter/Finger/running/x_test.npy"
+        path_to_y_test = "/Users/zber/ProgramDev/data_process_jupyter/Finger/running/y_test.npy"
+
+        trainset = DataSet(path_to_x_train, path_to_y_train)
+        testset = DataSet(path_to_x_test, path_to_y_test)
+        trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
+        testloader = DataLoader(testset, batch_size=batch_size, shuffle=True)
+
     return trainloader, testloader

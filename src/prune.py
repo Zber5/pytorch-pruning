@@ -8,6 +8,14 @@ import numpy as np
 import time
 import math
 
+mode = "LeNet"
+
+
+def set_mode(new_mode):
+    global mode
+    mode = new_mode
+
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -18,9 +26,11 @@ def replace_layers(model, i, indexes, layers):
 
 
 def prune_vgg16_conv_layer(model, layer_index, filter_index, use_cuda=False):
+    global mode
 
     # replace batchnormal layer
-    model = replace_bn_layers(model, layer_index, filter_index)
+    if mode == "MobileNet":
+        model = replace_bn_layers(model, layer_index, filter_index)
 
     _, conv = list(model.features._modules.items())[layer_index]
     next_conv = None
@@ -141,7 +151,7 @@ def prune_vgg16_conv_layer(model, layer_index, filter_index, use_cuda=False):
 
 def replace_bn_layers(model, layer_index, filter_index):
     del_num = 1
-    _, current_layer  = list(model.features._modules.items())[layer_index+1]
+    _, current_layer = list(model.features._modules.items())[layer_index+1]
     new_num_features = current_layer.num_features - del_num
 
     new_bn = nn.BatchNorm2d(

@@ -245,10 +245,13 @@ class PrunningFineTuner_VGG16:
             acc = self.test()
             if acc < 0.87:
                 break
-
+        optimizer = optim.Adam(self.model.parameters(), lr=config.lr)
         print("Finished. Going to fine tune the model a bit more")
         self.train(optimizer, epoches=config.finetune_epoch)
-        torch.save(model.state_dict(), "model_prunned.pt")
+        torch.save(model.state_dict(), "Fin_sitting.pt")
+        
+    def save_model(self, model_path):
+        torch.save(self.model.state_dict(), model_path)
 
 
 def get_args():
@@ -290,6 +293,8 @@ def model_size(layers):
 
 
 if __name__ == '__main__':
+    set_mode("LeNet")
+
     args = get_args()
     args.use_cuda = args.use_cuda and torch.cuda.is_available()
 
@@ -298,11 +303,11 @@ if __name__ == '__main__':
         epoch = 20
         batch_size = 64
         is_bn = False
-        num_filters_to_prune_per_iteration = 20
+        num_filters_to_prune_per_iteration = 10
         prune_percentage = 0.8
-        threshold = 0.80
-        retrian_epoch = 20
-        finetune_epoch = 10
+        threshold = 0.97
+        retrian_epoch = 5
+        finetune_epoch = 5
 
     # args = get_args()
     #
@@ -325,7 +330,9 @@ if __name__ == '__main__':
 
     # dataset = "MNIST"
     # dataset = "EMG"
-    dataset = "CIFAR10"
+    # dataset = "CIFAR10"
+    # dataset = "Fin_Sitting"
+    dataset = "Fin_SitRun"
 
 
     # param = {
@@ -347,27 +354,40 @@ if __name__ == '__main__':
 
     # net.load_state_dict(torch.load('models/convnet_pretrained.pkl'))
 
+    kwargs = {
+        'in_channel': 6,
+        'out1_channel': 5,
+        'out2_channel': 23,
+        'fc': 39,
+        'out_classes': 6,
+        'kernel_size': 14,
+        'flatten_factor': 27
+    }
+
+
     # kwargs = {
-    #     'in_channel': 8,
-    #     'out1_channel': 20,
-    #     'out2_channel': 50,
-    #     'fc': 52,
+    #     'in_channel': 6,
+    #     'out1_channel': 6,
+    #     'out2_channel': 4,
+    #     'fc': 55,
     #     'out_classes': 6,
     #     'kernel_size': 14,
-    #     'flatten_factor': 15
+    #     'flatten_factor': 27
     # }
+
     #
-    # model = LeNet5(**kwargs)
-    model = VGG_BN("VGG11")
+    model = LeNet5(**kwargs)
+    # model = VGG_BN("VGG11")
 
     # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_Har_LeNet_20200711-141653/model.pt"
     # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_EMG_LeNet_20200711-144220/model.pt"
     # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_myHealth_LeNet_20200711-145106/model.pt"
     # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_FinDroid_LeNet_20200711-145503/model.pt"
-    model_path = "C:\\Users\\Zber\\Documents\\Dev_program\\FastGrownTest\\results\\CIFAR10_VGG11_20200828-215209\\model_VGG11.ckpt"
+    # model_path = "C:\\Users\\Zber\\Documents\\Dev_program\\FastGrownTest\\results\\CIFAR10_VGG11_20200828-215209\\model_VGG11.ckpt"
 
 
-    model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
+    # model.load_state_dict(torch.load("/Users/zber/ProgramDev/pytorch-pruning/src/LeNet_fullSize.pt"))
+    model.load_state_dict(torch.load("/Users/zber/ProgramDev/pytorch-pruning/src/LeNet_SmallSize.pt"))
 
     if args.use_cuda:
         model = model.cuda()
@@ -375,10 +395,14 @@ if __name__ == '__main__':
     # create fine tuner object
     fine_tuner = PrunningFineTuner_VGG16(trainloader, testloader, model)
 
-    # fine_tuner.train(epoches=10)
+    fine_tuner.test()
+
+    fine_tuner.train(epoches=config.epoch)
     # torch.save(model, "model")
 
     fine_tuner.test()
+    
+    # fine_tuner.save_model("LeNet_SmallSize.pt")
 
     # prune
-    fine_tuner.prune()
+    # fine_tuner.prune()
