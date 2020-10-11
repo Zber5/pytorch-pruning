@@ -300,7 +300,7 @@ if __name__ == '__main__':
 
     class config:
         lr = 0.0005
-        epoch = 20
+        epoch = 10
         batch_size = 64
         is_bn = False
         num_filters_to_prune_per_iteration = 10
@@ -328,11 +328,11 @@ if __name__ == '__main__':
     # elif args.prune:
     #     fine_tuner.prune()
 
-    # dataset = "MNIST"
+    dataset = "MNIST"
     # dataset = "EMG"
     # dataset = "CIFAR10"
     # dataset = "Fin_Sitting"
-    dataset = "Fin_SitRun"
+    # dataset = "Fin_SitRun"
 
 
     # param = {
@@ -344,25 +344,28 @@ if __name__ == '__main__':
 
     trainloader, testloader = generate_data_loader(batch_size=config.batch_size, dataset=dataset)
 
-    # kwargs = {'out1': 20, 'out2': 50, 'fc1': 500}
+    kwargs = {'out1': 20, 'out2': 50, 'fc1': 500}
     #
     # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Models/model_standard_20_50_500_.ckpt"
     # har_path = ""
     #
     #
-    # # model = LeNet5_GROW_P(**kwargs)
+    model = LeNet5_GROW_P(**kwargs)
+
+    # change last layer weights
+    fc_last = torch.nn.Linear(500, 5)
 
     # net.load_state_dict(torch.load('models/convnet_pretrained.pkl'))
 
-    kwargs = {
-        'in_channel': 6,
-        'out1_channel': 5,
-        'out2_channel': 23,
-        'fc': 39,
-        'out_classes': 6,
-        'kernel_size': 14,
-        'flatten_factor': 27
-    }
+    # kwargs = {
+    #     'in_channel': 6,
+    #     'out1_channel': 5,
+    #     'out2_channel': 23,
+    #     'fc': 39,
+    #     'out_classes': 6,
+    #     'kernel_size': 14,
+    #     'flatten_factor': 27
+    # }
 
 
     # kwargs = {
@@ -376,7 +379,7 @@ if __name__ == '__main__':
     # }
 
     #
-    model = LeNet5(**kwargs)
+    # model = LeNet5(**kwargs)
     # model = VGG_BN("VGG11")
 
     # model_path = "/Users/zber/ProgramDev/exp_pyTorch/results/Standard_Har_LeNet_20200711-141653/model.pt"
@@ -387,7 +390,7 @@ if __name__ == '__main__':
 
 
     # model.load_state_dict(torch.load("/Users/zber/ProgramDev/pytorch-pruning/src/LeNet_fullSize.pt"))
-    model.load_state_dict(torch.load("/Users/zber/ProgramDev/pytorch-pruning/src/LeNet_SmallSize.pt"))
+    # model.load_state_dict(torch.load("/Users/zber/ProgramDev/pytorch-pruning/src/LeNet_SmallSize.pt"))
 
     if args.use_cuda:
         model = model.cuda()
@@ -397,12 +400,12 @@ if __name__ == '__main__':
 
     fine_tuner.test()
 
-    fine_tuner.train(epoches=config.epoch)
+    # fine_tuner.train(epoches=config.epoch)
     # torch.save(model, "model")
 
-    fine_tuner.test()
+    # fine_tuner.test()
     
-    # fine_tuner.save_model("LeNet_SmallSize.pt")
+    fine_tuner.save_model("../model/mnist_fullSize.pt")
 
     # prune
     # fine_tuner.prune()

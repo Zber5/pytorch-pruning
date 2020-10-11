@@ -103,6 +103,23 @@ class Config:
 
 
 def generate_data_loader(batch_size, dataset='MNIST', is_main=True):
+    # if dataset == 'MNIST':
+    #     transform = transforms.Compose([
+    #         transforms.ToTensor(),
+    #         transforms.Normalize((0.1307,), (0.3081,)),
+    #     ])
+    #     if is_main:
+    #         root_dir = '../data'
+    #     else:
+    #         root_dir = '../../data'
+    #     trainset = torchvision.datasets.MNIST(root=root_dir, train=True,
+    #                                           download=True, transform=transform)
+    #     trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
+    #                                               shuffle=True, num_workers=0)
+    #     testset = torchvision.datasets.MNIST(root=root_dir, train=False,
+    #                                          download=True, transform=transform)
+    #     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
+    #                                              shuffle=False, num_workers=0)
     if dataset == 'MNIST':
         transform = transforms.Compose([
             transforms.ToTensor(),
@@ -114,12 +131,26 @@ def generate_data_loader(batch_size, dataset='MNIST', is_main=True):
             root_dir = '../../data'
         trainset = torchvision.datasets.MNIST(root=root_dir, train=True,
                                               download=True, transform=transform)
-        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
-                                                  shuffle=True, num_workers=0)
+
         testset = torchvision.datasets.MNIST(root=root_dir, train=False,
                                              download=True, transform=transform)
+
+        # selecting classes
+        train_idx = torch.tensor([True if i in [0, 1, 2, 3, 4] else False for i in trainset.targets])
+        trainset.data = trainset.data[train_idx]
+        trainset.targets = trainset.targets[train_idx]
+
+        test_idx = torch.tensor([True if i in [0, 1, 2, 3, 4] else False for i in testset.targets])
+        testset.data = testset.data[test_idx]
+        testset.targets = testset.targets[test_idx]
+
+        trainloader = torch.utils.data.DataLoader(trainset, batch_size=batch_size,
+                                                  shuffle=True, num_workers=0)
+
         testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
                                                  shuffle=False, num_workers=0)
+
+
     elif dataset == 'CIFAR10':
         transform = transforms.Compose(
             [transforms.ToTensor(),
